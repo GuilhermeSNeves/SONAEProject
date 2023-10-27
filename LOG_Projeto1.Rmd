@@ -1,0 +1,1176 @@
+---
+title: "LOG Projeto 1"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+LOG PROJETO 1
+
+```{r}
+library("dplyr")
+library("tidyr")
+library("RMariaDB")
+
+setwd("/Users/GuilhermeNeves/Library/Mobile Documents/com~apple~CloudDocs/Porto Business School/Modulo I/Project 1")
+
+drv <- dbDriver("MariaDB")
+
+PB1 <- dbConnect(drv,
+       host = "098bd92b-461b-481c-a40d-ea47cab7567f.497129fd685f442ca4df759dd55ec01b.databases.appdomain.cloud",
+       username = "pgbia16p1e2g7u2",
+       password = "4Wh7Ln",
+       port = 30943,
+       ssl.ca = "041baeec-1272-11e9-8c9b-ae2e3a9c1b17(2)",
+       dbname = "pgbia16p1e2g7u2")
+```
+
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+continente_trx <- read.csv2("continente.trx_sample_aleatoria.csv")
+cluster_table <- read.csv2("cluster_table_RM.csv")
+aai_dim_customer <- dbReadTable(PB1,"aai_dim_customer")
+aai_dim_product <- dbReadTable(PB1,"aai_dim_product")
+```
+
+
+```{r}
+dbDisconnect(PB1)
+```
+
+CLUSTERING
+
+```{r}
+library(cluster)
+library(stats)
+library(ggplot2)
+library(ggfortify)
+library(tidyverse)
+library(factoextra)
+library(dplyr)
+library(tidyr)
+library(RMariaDB)
+```
+
+K-MEANS TENTATIVA 1
+
+```{r}
+data <- select(cluster_table, c(1,3,4))
+data <- scale(data)
+```
+
+
+```{r}
+#VER O NUMERO DE CLUSTERS
+library(cluster)
+wss <- (nrow(data)-1)*sum(apply(data,2,var))
+for (i in 2:15) wss[i] <- sum(kmeans(data, centers=i)$withinss)
+plot(1:15, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+```
+
+
+```{r}
+set.seed(123)
+
+fviz_nbclust(data, kmeans, method = "silhouette")
+```
+
+
+```{r}
+#K-MEANS
+k2_results <- kmeans(data, centers = 2, nstart = 25)
+k3_results <- kmeans(data, centers = 3, nstart = 25)
+k4_results <- kmeans(data, centers = 4, nstart = 25)
+str(k2_results)
+str(k3_results)
+str(k4_results)
+
+#GRAFICO DE DISPERSAO DOS CLUSTERS
+plot(data, col = k2_results$cluster)
+plot(data, col = k3_results$cluster)
+plot(data, col = k4_results$cluster)
+
+fviz_cluster(k2_results, data = data)
+fviz_cluster(k3_results, data = data)
+fviz_cluster(k4_results, data = data)
+
+# PLOTS TO COMPARE
+
+p2 <- fviz_cluster(k2_results, geom = "point",  data = data) + ggtitle("k = 3")
+p3 <- fviz_cluster(k3_results, geom = "point",  data = data) + ggtitle("k = 4")
+p4 <- fviz_cluster(k4_results, geom = "point",  data = data) + ggtitle("k = 5")
+
+library(gridExtra)
+grid.arrange(p2, p3, p4, nrow = 2)
+```
+
+```{r}
+#GRAFICO ATRAVES DE GGPLOT
+
+autoplot(k2_results, data, frame = TRUE)
+autoplot(k3_results, data, frame = TRUE)
+autoplot(k4_results, data, frame = TRUE)
+```
+
+
+```{r}
+#CLUSTER CENTER
+k2_results$centers
+k3_results$centers
+k4_results$centers
+```
+
+
+K-MEANS TENTATIVA 2
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+sample_aleat <- read.csv2("sample_aleatoria_general1.csv")
+```
+
+```{r}
+#TABELA PARA CLUSTER
+
+df <- 
+  sample_aleat %>%
+  select(cod_produto, cod_subcat_produto, quantidade, valor_total_produto, valor_final_produto, id_tipo_desconto)
+
+#TRANSFORMAR EM VARIÁVEIS NUMERICAS
+df$quantidade <- as.numeric(df$quantidade)
+df$valor_total_produto <- as.numeric(df$valor_total_produto)
+df$valor_final_produto <- as.numeric(df$valor_final_produto)
+```
+
+
+```{r}
+#ADICIONAR VARIÀVEL
+
+df <- 
+  df %>%
+  group_by(cod_produto) %>%
+  mutate(valor_total_bruto = sum(valor_final_produto),
+         qnt_total = sum(quantidade),
+         avg_valor_bruto = mean(valor_final_produto),
+         valor_total_liquido = sum(valor_total_produto)) %>%
+  ungroup
+
+#RETIRAR VARIAVEL
+
+df <- df[, !(names(df) %in% c("valor_total_produto", "valor_final_produto", "quantidade", "cod_produto", "cod_subcat_produto", "id_tipo_desconto"))]
+  
+```
+
+
+```{r}
+#ANÁLISE FATORIAL
+
+cor(df)
+
+fit <- princomp(df, cor = TRUE)
+
+summary(fit)
+
+plot(fit,type="lines")
+
+loadings(fit)
+```
+
+
+```{r}
+#setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+#write.csv2(df, file = "df_cluster1.csv")
+```
+
+
+```{r}
+df <- scale(df)
+
+distance <- get_dist(df)
+fviz_dist(distance, gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07")) #não corre com dataframe com muito volume
+```
+
+
+```{r}
+#VER O NUMERO DE CLUSTERS
+
+wss <- (nrow(df)-1)*sum(apply(df,2,var))
+for (i in 2:15) wss[i] <- sum(kmeans(df, centers=i)$withinss)
+plot(1:15, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+```
+
+```{r}
+set.seed(123)
+
+fviz_nbclust(df, kmeans, method = "silhouette")
+```
+
+
+```{r}
+#K-MEANS
+k3_results <- kmeans(df, centers = 3, nstart = 25)
+k4_results <- kmeans(df, centers = 4, nstart = 25)
+k5_results <- kmeans(df, centers = 5, nstart = 25)
+str(k3_results)
+str(k4_results)
+str(k5_results)
+
+#GRAFICO DE DISPERSAO DOS CLUSTERS
+plot(df, col = k3_results$cluster)
+plot(df, col = k4_results$cluster)
+plot(df, col = k5_results$cluster)
+
+fviz_cluster(k3_results, data = df)
+fviz_cluster(k4_results, data = df)
+fviz_cluster(k5_results, data = df)
+
+# PLOTS TO COMPARE
+
+p3 <- fviz_cluster(k3_results, geom = "point",  data = df) + ggtitle("k = 3")
+p4 <- fviz_cluster(k4_results, geom = "point",  data = df) + ggtitle("k = 4")
+p5 <- fviz_cluster(k5_results, geom = "point",  data = df) + ggtitle("k = 5")
+
+library(gridExtra)
+grid.arrange(p3, p4, p5, nrow = 2)
+```
+
+
+```{r}
+#GRAFICO ATRAVES DE GGPLOT
+
+autoplot(k3_results, df, frame = TRUE)
+autoplot(k4_results, df, frame = TRUE)
+autoplot(k5_results, df, frame = TRUE)
+```
+
+
+```{r}
+#CLUSTER CENTER
+
+k3_results$centers
+k4_results$centers
+k5_results$centers
+```
+
+
+K-MEANS TENTATIVA 3
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+sample_aleat <- read.csv2("sample_aleatoria_general1.csv")
+```
+
+```{r}
+#TABELA NOVA 
+df <- 
+  sample_aleat %>%
+  select(dia_transacao, tipo_transacao, cod_produto, cod_subcat_produto, tipo_marca, quantidade, valor_total_produto, valor_final_produto, id_tipo_desconto)
+
+#TRANSFORMAÇÃO DE VARIÁVEIS
+
+df$quantidade <- as.numeric(df$quantidade)
+df$valor_total_produto <- as.numeric(df$valor_total_produto)
+df$valor_final_produto <- as.numeric(df$valor_final_produto)
+```
+
+
+```{r}
+#TRANSFORMAÇÃO DAS VARIÁVEIS
+df <- 
+  df %>%
+  group_by(cod_subcat_produto) %>%
+  mutate(valor_total_bruto = sum(valor_final_produto),
+         qnt_total = sum(quantidade),
+         avg_valor_bruto = mean(valor_final_produto),
+         tipo_marca = case_when(
+                        tipo_marca == "MP" ~ 0,
+                        tipo_marca == "MF" ~ 1,
+                        tipo_marca == "MX" ~ 0,
+                        tipo_marca == "PP" ~ 0),
+         tipo_transacao = case_when(
+                          tipo_transacao == "P" ~ 0,
+                          tipo_transacao == "O" ~ 1)) %>%
+  ungroup
+```
+
+
+```{r}
+# Definir a proporção de amostragem desejada (por exemplo, 0.1 para 10%)
+proporcao_amostragem <- 0.01
+
+# Realizar a amostragem aleatória dos dados
+df1 <- sample_n(df, size = floor(nrow(df) * proporcao_amostragem))
+
+# Verificar o número de linhas nos dados amostrados
+nrow(df1)
+```
+
+
+```{r}
+#VERIFICAR SE TEMOS UMA AMOSTRAR BEM REPRESENTATIVA ANUAL
+
+df1$dia_transacao <- as.Date(as.character(df1$dia_transacao), format = "%Y%m%d")
+
+soma_valor_total_bruto_por_dia <- aggregate(valor_final_produto ~ dia_transacao, data = df1, FUN = sum)
+
+plot(soma_valor_total_bruto_por_dia$dia_transacao, soma_valor_total_bruto_por_dia$valor_final_produto, 
+     type = "p", 
+     xlab = "Data", 
+     ylab = "Soma do Valor Total Bruto", 
+     main = "Soma do Valor Total Bruto por Dia")
+```
+
+
+```{r}
+#setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+#write.csv2(df1, file = "Tabela_de_cluster_final.csv")
+```
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+df1 <- read_csv2("Tabela_de_cluster_final.csv")
+```
+
+
+```{r}
+#TABELA FINAL PARA CLUSTER 
+
+df1 <- df1[, !(names(df1) %in% c("valor_total_produto", "valor_final_produto","cod_produto", "quantidade","cod_subcat_produto", "dia_transacao", "...1"))]
+```
+
+
+```{r}
+#Normalização das variaveis
+df2 <- scale(df1)
+
+#Retornar a dataframe
+df2 <- as.data.frame(df2)
+```
+
+```{r}
+##OUTRA FORMA
+#Normalização Segundo a Amplitude
+score_z <- scale(df1, center = T)
+hist(score_z)
+
+# Carregando pacote para cálculo de assimetria
+library(e1071)
+
+no_norm <- skewness(as.matrix(df1))
+norm <- skewness(score_z)
+
+no_norm
+norm
+```
+
+
+```{r}
+#VER O NUMERO DE CLUSTERS
+
+wss <- (nrow(df2)-1)*sum(apply(df2,2,var))
+for (i in 2:15) wss[i] <- sum(kmeans(df2, centers=i)$withinss)
+plot(1:15, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+```
+
+```{r}
+set.seed(123)
+
+fviz_nbclust(df2, kmeans, method = "silhouette") 
+```
+
+```{r}
+#K-means
+set.seed(123)
+k4_results <- kmeans(df2, centers = 4, nstart = 25)
+autoplot(k4_results, df2, frame = TRUE)
+k4_results$centers
+```
+
+
+```{r}
+#ADICIONAR OS CLUSTERS AO DATAFRAME
+df3 <- 
+df2 %>%
+  mutate(Cluster = k4_results$cluster)
+```
+```{r}
+# Criar o data frame com os centroids
+center <- as.data.frame(k4_results$centers)
+
+
+# Gerar o data frame transposto
+library(data.table)
+df_t <- transpose(center)
+
+#redefine row and column names
+rownames(df_t) <- colnames(center)
+colnames(df_t) <- rownames(center)
+
+
+# Criar a variável x com o nome das variáveis
+df_t$x <- rownames(df_t) 
+```
+```{r}
+# Construir um data frame em que a coluna x será o nome das features, a coluna y será o valor dos centroides, e a coluna group será o nome do cluster
+df_reshaped <- data.frame(x = df_t$x,                           
+                       y = c(df_t$'1', df_t$'2', df_t$'3', df_t$'4'),
+                       group = c(rep("1", nrow(df_t)),
+                                 rep("2", nrow(df_t)),
+                                 rep("3", nrow(df_t)),
+                                 rep("4", nrow(df_t))
+                                 )
+)
+
+```
+```{r}
+# Cria o gráfico de linhas a partir da tabela df_reshaped
+df_reshaped %>%
+  ggplot( aes(x=x, y=y, group=group, color=group)) +
+    geom_line()
+```
+
+
+```{r}
+k4_results$centers
+k4_results$tot.withinss
+k4_results$betweenss
+k4_results$size
+```
+
+DBSCAN TENTATIVA 1
+
+```{r}
+# For Data Manipulation
+library(tidyverse) 
+
+# For Clustering algorithm
+library(cluster)
+library(fpc)
+library(dbscan)
+
+# for cluster visualization
+library(factoextra)
+```
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+df_cluster <- read.csv2("df_cluster1.csv")
+```
+
+```{r}
+# Definir a proporção de amostragem desejada (por exemplo, 0.1 para 10%)
+proporcao_amostragem <- 0.2
+
+# Realizar a amostragem aleatória dos dados
+df_cluster <- sample_n(df_cluster, size = floor(nrow(df_cluster) * proporcao_amostragem))
+
+# Verificar o número de linhas nos dados amostrados
+nrow(df_cluster)
+```
+
+
+```{r}
+#LIMPAR OS DADOS POR OMISSÃO DE NA
+
+df_cluster <- na.omit(df_cluster)
+
+#Retirar cod_Subcat_produto 
+
+df_cluster1 <- df_cluster[2:5]
+```
+
+```{r}
+#NORMALIZAÇÃO SEGUNDO A AMPLITUDE
+
+score_z <- scale(df_cluster1, center = T)
+hist(score_z)
+```
+
+```{r}
+#CALCULO DE SIMETRIA
+##O IDEAL ERA O VALOR SKEWESS FOSSE IGUAL COM E SEM NORMALIZAÇÃO
+library(e1071)
+
+no_norm <- skewness(as.matrix(df_cluster1))
+norm <- skewness(score_z)
+
+no_norm
+norm
+```
+
+
+```{r}
+#ENCONTRAR O VALOR IDEAL PARA EPS
+
+## k: corresponde ao mesmo valor de minPoints
+
+dbscan::kNNdistplot(score_z, k = 3)
+abline(h = 0.65, lty = 2)
+```
+
+```{r}
+set.seed(123)
+
+## fpc package
+res.fpc <- fpc::dbscan(score_z, eps = 0.65, MinPts = 3) #falha por capacidade computacional
+
+## dbscan package
+res.db <- dbscan::dbscan(score_z, 0.65, 3) #falha por capacidade computacional
+```
+
+```{r}
+#VERIFICAR SE OS PACOTES FPC E DBSCAN CHEGAM AO MESMO RESULTADO
+
+all(res.fpc$cluster == res.db$cluster)
+```
+
+```{r}
+fviz_cluster(res.fpc, score_z, geom = "point")
+```
+
+
+DBSCAN TENTATIVA 2
+
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+df1 <- read.csv2("Tabela_de_cluster_final.csv")
+```
+
+
+```{r}
+#TABELA FINAL PARA CLUSTER 
+
+df1 <- df1[, !(names(df1) %in% c("valor_total_produto", "valor_final_produto","cod_produto", "quantidade", "dia_transacao"))]
+```
+
+
+```{r}
+# Verificar se há valores duplicados na coluna cod_subcat_produto
+if (any(duplicated(df1$cod_subcat_produto))) {
+  # Remover valores duplicados
+  df_dbscan <- df1[!duplicated(df1$cod_subcat_produto), ]
+}
+```
+
+
+```{r}
+#ABRIR O DATAFRAME E COLOCAR A COLUNA cod_subcat_produto COMO INDEX DAS LINHAS
+
+# Set subcategory_code column as row names
+rownames(df_dbscan) <- df_dbscan$cod_subcat_produto
+
+# Remover original subcategory_code column from data frame
+df_dbscan$cod_subcat_produto <- NULL
+```
+
+
+```{r}
+#LIMPAR OS DADOS POR OMISSÃO DE NA
+
+df_dbscan <- na.omit(df_dbscan)
+```
+
+
+```{r}
+#NORMALIZAÇÃO SEGUNDO A AMPLITUDE
+
+score_z <- scale(df_dbscan, center = T)
+hist(score_z)
+```
+
+
+```{r}
+#CALCULO DE SIMETRIA
+##O IDEAL ERA O VALOR SKEWESS FOSSE IGUAL COM E SEM NORMALIZAÇÃO
+library(e1071)
+
+no_norm <- skewness(as.matrix(df_dbscan))
+norm <- skewness(score_z)
+
+no_norm
+norm
+```
+
+```{r}
+#ENCONTRAR O VALOR IDEAL PARA EPS
+
+## k: corresponde ao mesmo valor de minPoints
+
+dbscan::kNNdistplot(score_z, k = 3)
+abline(h = 2.5, lty = 2)
+```
+
+```{r}
+set.seed(123)
+
+## fpc package
+res.fpc <- fpc::dbscan(score_z, eps = 2.5, MinPts = 3)
+
+## dbscan package
+res.db <- dbscan::dbscan(score_z, 2.5, 3)
+```
+
+```{r}
+#VERIFICAR SE OS PACOTES FPC E DBSCAN CHEGAM AO MESMO RESULTADO
+
+all(res.fpc$cluster == res.db$cluster)
+```
+
+
+```{r}
+fviz_cluster(res.fpc, score_z, geom = "point")
+```
+
+REGRESSÂO TENTATIVA 1
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+continente_trx_sample_aleat <- read.csv2("continente.trx_sample_aleatoria.csv")
+```
+
+
+```{r}
+#CRIAR DATAFRAME PARA REGRESSÃO
+
+regression_sample <- 
+  aai_dim_product %>%
+  inner_join(continente_trx_sample_aleat, by = c("SKU")) %>%
+  select(SKU, SUBCAT_CD_EXT, BRAND_TYPE_CD, TRANSACTION_ID_MASK, CUSTOMER_ACCOUNT_NR_MASK, QTY, NET_SLS_AMT, GROSS_SLS_AMT, PROD_DSCNT_ISSUED_AMT, TRANS_DSCNT_RAT_AMT, DIRECT_DSCNT_AMT)
+
+regression_sample$CUSTOMER_ACCOUNT_NR_MASK <- as.integer(regression_sample$CUSTOMER_ACCOUNT_NR_MASK)
+regression_sample$QTY <- as.numeric(regression_sample$QTY)
+regression_sample$NET_SLS_AMT <- as.numeric(regression_sample$NET_SLS_AMT)
+regression_sample$GROSS_SLS_AMT <- as.numeric(regression_sample$GROSS_SLS_AMT)
+regression_sample$PROD_DSCNT_ISSUED_AMT <- as.numeric(regression_sample$PROD_DSCNT_ISSUED_AMT)
+regression_sample$TRANS_DSCNT_RAT_AMT <- as.numeric(regression_sample$TRANS_DSCNT_RAT_AMT)
+regression_sample$DIRECT_DSCNT_AMT <- as.numeric(regression_sample$DIRECT_DSCNT_AMT)
+```
+
+
+```{r}
+#CRIAR VOLUME TOTAL DE VENDAS BRUTAS
+
+regression_sample <- 
+  regression_sample %>%
+  group_by(SKU) %>%
+  mutate(VOL_TOTAL_GROSS = sum(GROSS_SLS_AMT))
+```
+
+
+```{r}
+#ANÁLISE EXPLORATORIA DOS DADOS
+
+#RETIRAR AS VARIÀVEIS CATEGORICAS
+df_reg <- regression_sample[, !(names(regression_sample) %in% c("SKU", "SUBCAT_CD_EXT", "BRAND_TYPE_CD", "TRANSACTION_ID_MASK", "CUSTOMER_ACCOUNT_NR_MASK", "NET_SLS_AMT", "GROSS_SLS_AMT"))]
+
+# Sumário estatístico das variáveis
+summary(df_reg) 
+
+# Matriz de correlação entre as variáveis
+cor(df_reg)      
+
+#boxplots de dispersão
+boxplot(df_reg$VOL_TOTAL_GROSS)
+boxplot(df_reg$PROD_DSCNT_ISSUED_AMT)
+boxplot(df_reg$TRANS_DSCNT_RAT_AMT)
+boxplot(df_reg$DIRECT_DSCNT_AMT)
+
+# Gráfico de dispersão entre vendas e promoções
+plot(df_reg$VOL_TOTAL_GROSS ~ df_reg$PROD_DSCNT_ISSUED_AMT)  
+plot(df_reg$VOL_TOTAL_GROSS ~ df_reg$TRANS_DSCNT_RAT_AMT)
+plot(df_reg$VOL_TOTAL_GROSS ~ df_reg$DIRECT_DSCNT_AMT)
+```
+
+
+```{r}
+#ANALISE FATORIAL 
+
+fit <- princomp(df_reg, cor = TRUE)
+
+summary(fit)
+
+plot(fit,type="lines")
+```
+
+
+```{r}
+#CONTINUAÇÃO ANÁLISE FATORIAL
+
+loadings(fit)
+```
+
+
+```{r}
+#DIVIDIR OS DADOS EM TREINO E TESTE
+
+#DEFINIR UMA SEMENTE PARA REPRODUTIBILIDADE
+set.seed(123)  
+
+#SELECIONAR 70% DOS DADOS PARA TREINO E 30% PARA TESTE
+indices_treino <- sample(1:nrow(df_reg), 0.7 * nrow(df_reg))  
+dados_treino <- df_reg[indices_treino, ]
+dados_teste <- df_reg[-indices_treino, ]
+```
+
+
+```{r}
+#MODELO REGRESSÂO LINEAR
+
+modelo <- lm(VOL_TOTAL_GROSS ~ PROD_DSCNT_ISSUED_AMT + TRANS_DSCNT_RAT_AMT + DIRECT_DSCNT_AMT, data = dados_treino)
+modelo
+```
+
+
+```{r}
+#AVALIAR O MODELO COM APLICAÇÃO NOS DADOS DE TESTE
+
+# Faz as previsões nos dados de treino
+previsoes <- predict(modelo, newdata = dados_teste)
+summary(previsoes)
+
+# Calcula o coeficiente de determinação (R²) nos dados de treino
+R2 <- cor(dados_teste$VOL_TOTAL_GROSS, previsoes)^2
+R2
+
+# Calcula o erro médio quadrático (RMSE) nos dados de treino
+RMSE <- sqrt(mean((dados_teste$VOL_TOTAL_GROSS - previsoes)^2))
+RMSE
+
+#COMPARAR AS PREVISOES 
+
+comparacao_teste <- data.frame(Real = dados_teste$VOL_TOTAL_GROSS, Previsao = previsoes)
+
+library(ggplot2)
+
+ggplot(comparacao_teste, aes(x = Real, y = Previsao)) +
+  geom_point() +
+  xlab("Valores Reais") +
+  ylab("Previsões") +
+geom_abline(color = "red",
+            linewidth = 2)
+```
+
+
+-- MODELO COM NORMALIZAÇÃO POIS O VALOR DE RMSE ERA MUITO ALTO SEM NORMALIZAÇÃO --
+```{r}
+#NORMALIZAR OS DADOS 
+
+df_reg1 <- scale(df_reg) 
+
+#TORNAR EM DATA.FRAME OUTRA VEZ
+
+df_reg1 <- as.data.frame(df_reg1) 
+```
+
+
+```{r}
+#DEFINIR UMA SEMENTE PARA REPRODUTIBILIDADE
+set.seed(123)  
+
+#SELECIONAR 70% DOS DADOS PARA TREINO E 30% PARA TESTE
+indices_treino <- sample(1:nrow(df_reg1), 0.7 * nrow(df_reg1))  
+dados_treino <- df_reg1[indices_treino, ]
+dados_teste <- df_reg1[-indices_treino, ]
+```
+
+
+```{r}
+modelo <- lm(VOL_TOTAL_GROSS ~ PROD_DSCNT_ISSUED_AMT + TRANS_DSCNT_RAT_AMT + DIRECT_DSCNT_AMT, data = dados_treino)
+modelo
+```
+
+
+```{r}
+#AVALIAR O MODELO COM APLICAÇÃO NOS DADOS DE TESTE
+
+# Faz as previsões nos dados de treino
+previsoes <- predict(modelo, newdata = dados_teste)
+summary(previsoes)
+
+# Calcula o coeficiente de determinação (R²) nos dados de treino
+R2 <- cor(dados_teste$VOL_TOTAL_GROSS, previsoes)^2
+R2
+
+# Calcula o erro médio quadrático (RMSE) nos dados de treino
+RMSE <- sqrt(mean((dados_teste$VOL_TOTAL_GROSS - previsoes)^2))
+RMSE
+
+#COMPARAR AS PREVISOES 
+
+comparacao_teste <- data.frame(Real = dados_teste$VOL_TOTAL_GROSS, Previsao = previsoes)
+
+library(ggplot2)
+
+ggplot(comparacao_teste, aes(x = Real, y = Previsao)) +
+  geom_point() +
+  xlab("Valores Reais") +
+  ylab("Previsões") +
+geom_abline(color = "red",
+            linewidth = 2)
+```
+
+
+REGRESSÂO TENTATIVA 2
+
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+continente_trx <- read.csv2("continente.trx_sample_aleatoria.csv")
+```
+
+
+```{r}
+#VERIFICAR SE TEMOS UMA AMOSTRAR BEM REPRESENTATIVA ANUAL
+
+continente_trx$TIME_KEY <- as.Date(as.character(continente_trx$TIME_KEY), format = "%Y%m%d")
+#continente_trx$TIME_KEY <- as.yearmon(continente_trx$TIME_KEY)
+
+continente_trx$GROSS_SLS_AMT <- as.numeric(continente_trx$GROSS_SLS_AMT)
+soma_valor_total_bruto_por_dia <- aggregate(GROSS_SLS_AMT ~ TIME_KEY, data = continente_trx, FUN = sum)
+
+plot(soma_valor_total_bruto_por_dia$TIME_KEY, soma_valor_total_bruto_por_dia$GROSS_SLS_AMT, 
+     type = "p", 
+     xlab = "Data", 
+     ylab = "Soma do Valor Total Bruto", 
+     main = "Soma do Valor Total Bruto por Dia")
+```
+
+
+```{r}
+#DIVIDIR A AMOSTRA SO PARA O ANO 2022
+
+df_2022 <- subset(continente_trx, format(TIME_KEY, "%Y") == "2022")
+```
+
+```{r}
+#CRIAR DATAFRAME PARA REGRESSÃO
+aai_dim_product$SKU <- as.integer(aai_dim_product$SKU)
+
+regression_sample <- 
+  aai_dim_product %>%
+  inner_join(df_2022, by = c("SKU")) %>%
+  select(SKU, SUBCAT_CD_EXT, BRAND_TYPE_CD, TRANSACTION_ID_MASK, CUSTOMER_ACCOUNT_NR_MASK, QTY, NET_SLS_AMT, GROSS_SLS_AMT, PROD_DSCNT_ISSUED_AMT, TRANS_DSCNT_RAT_AMT, DIRECT_DSCNT_AMT)
+
+regression_sample$CUSTOMER_ACCOUNT_NR_MASK <- as.integer(regression_sample$CUSTOMER_ACCOUNT_NR_MASK)
+regression_sample$QTY <- as.numeric(regression_sample$QTY)
+regression_sample$NET_SLS_AMT <- as.numeric(regression_sample$NET_SLS_AMT)
+regression_sample$GROSS_SLS_AMT <- as.numeric(regression_sample$GROSS_SLS_AMT)
+regression_sample$PROD_DSCNT_ISSUED_AMT <- as.numeric(regression_sample$PROD_DSCNT_ISSUED_AMT)
+regression_sample$TRANS_DSCNT_RAT_AMT <- as.numeric(regression_sample$TRANS_DSCNT_RAT_AMT)
+regression_sample$DIRECT_DSCNT_AMT <- as.numeric(regression_sample$DIRECT_DSCNT_AMT)
+```
+```{r}
+aai_dim_customer$CUSTOMER_ACCOUNT_NR_MASK <- as.integer(aai_dim_customer$CUSTOMER_ACCOUNT_NR_MASK)
+regression_sample <- 
+  regression_sample %>%
+  inner_join(aai_dim_customer, by = c("CUSTOMER_ACCOUNT_NR_MASK")) %>%
+  select(seg_lifestyle_cd, SEG_AGE, FAMILY_MEMBERS, SKU, SUBCAT_CD_EXT, BRAND_TYPE_CD, TRANSACTION_ID_MASK, CUSTOMER_ACCOUNT_NR_MASK, QTY, NET_SLS_AMT, GROSS_SLS_AMT, PROD_DSCNT_ISSUED_AMT, TRANS_DSCNT_RAT_AMT, DIRECT_DSCNT_AMT )
+```
+
+```{r}
+summary(regression_sample)
+table(regression_sample$seg_lifestyle_cd)
+table(regression_sample$SEG_AGE)
+table(regression_sample$BRAND_TYPE_CD)
+table(regression_sample$FAMILY_MEMBERS)
+```
+
+
+```{r}
+#Verificar se há algum valor vazio na coluna "CUSTOMER_ACCOUNT_NR_MASK"
+valor_vazio <- any(is.na(regression_sample$CUSTOMER_ACCOUNT_NR_MASK))
+
+if (valor_vazio) {
+  cat("Existem valores vazios na coluna 'cliente'.")
+} else {
+  cat("Não existem valores vazios na coluna 'cliente'.")
+}
+```
+
+```{r}
+#Quantos valores vazios existem na coluna "CUSTOMER_ACCOUNT_NR_MASK"
+count_vazios <- sum(is.na(regression_sample$CUSTOMER_ACCOUNT_NR_MASK), na.rm = TRUE)
+
+cat("Existem", count_vazios, "valores vazios na coluna 'cliente'.")
+```
+
+```{r}
+#Remover os valores vazios na coluna "CUSTOMER_ACCOUNT_NR_MASK"
+regression_sample <- regression_sample[complete.cases(regression_sample$CUSTOMER_ACCOUNT_NR_MASK), ]
+
+nrow(regression_sample)
+```
+
+
+```{r}
+#Transformar variáveis
+
+regression_sample1 <- 
+  regression_sample %>%
+   mutate(FAMILY_MEMBERS = case_when(
+    FAMILY_MEMBERS %in% c("0", "1", "2", "3", "4", "5", "6", "7") ~ as.numeric(FAMILY_MEMBERS),
+    is.na(FAMILY_MEMBERS) ~ NA_integer_,
+    TRUE ~ NA_integer_),
+    BRAND_TYPE_CD = case_when(
+                        BRAND_TYPE_CD == "MP" ~ 0,
+                        BRAND_TYPE_CD == "MF" ~ 1,
+                        BRAND_TYPE_CD == "MX" ~ 0,
+                        BRAND_TYPE_CD == "PP" ~ 0),
+    SEG_AGE = recode(SEG_AGE,
+                        "SA_0" = 0,
+                        "SA_1" = 1,
+                        "SA_2" = 2,
+                        "SA_3" = 3,
+                        "SA_4" = 4,
+                        "SA_5" = 5,
+                        "SA_6" = 6,
+                        "SA_7" = 7))
+
+regression_sample1$seg_lifestyle_cd <- as.numeric(regression_sample1$seg_lifestyle_cd)
+```
+```{r}
+df_reg <- 
+  regression_sample1 %>%
+  na.omit(FAMILY_MEMBERS)
+```
+
+```{r}
+#CRIAR VOLUME TOTAL DE VENDAS BRUTAS/ TOTAL DOS DESCONTOS / TOTAL DE QUANTIDADE VENDIDAS / PERCENTAGEM DOS DESCONTOS 
+
+df_reg <- 
+  df_reg %>%
+  group_by(SUBCAT_CD_EXT) %>%
+  mutate(VOL_TOTAL_GROSS = sum(GROSS_SLS_AMT),
+         TOTAL_PROD_DSCNT = sum(PROD_DSCNT_ISSUED_AMT),
+         TOTAL_TRANS_DSCNT = sum(TRANS_DSCNT_RAT_AMT),
+         TOTAL_DIRECT_DSCNT = sum(DIRECT_DSCNT_AMT),
+         TOTAL_QTY = sum(QTY),
+         MEAN_BRAND_TYPE = mean(BRAND_TYPE_CD),
+         MEAN_FAMILY_MEMBERS = mean(FAMILY_MEMBERS),
+         MEAN_SEG_AGE = mean(SEG_AGE),
+         MEAN_SEG_LIFESTYLE = mean(seg_lifestyle_cd),
+         MEAN_PROD_DSCNT_PERCENT = mean(((PROD_DSCNT_ISSUED_AMT / GROSS_SLS_AMT) * 100)),
+         MEAN_TRANS_DSCNT_PERCENT = mean(((TRANS_DSCNT_RAT_AMT / GROSS_SLS_AMT) * 100)),
+         MEAN_DIRECT_DSCNT_PERCENT = mean(((DIRECT_DSCNT_AMT / GROSS_SLS_AMT) * 100)))
+```
+
+```{r}
+#ANÁLISE EXPLORATORIA DOS DADOS
+
+#RETIRAR AS VARIÀVEIS CATEGORICAS
+df_reg <- df_reg[, !(names(df_reg) %in% c("SKU", "SUBCAT_CD_EXT", "TRANSACTION_ID_MASK", "CUSTOMER_ACCOUNT_NR_MASK", "NET_SLS_AMT", "GROSS_SLS_AMT"))]
+```
+```{r}
+# Sumário estatístico das variáveis
+summary(df_reg) 
+
+# Matriz de correlação entre as variáveis
+cor(df_reg)      
+
+#boxplots de dispersão
+boxplot(df_reg$VOL_TOTAL_GROSS)
+boxplot(df_reg$PROD_DSCNT_ISSUED_AMT)
+boxplot(df_reg$TRANS_DSCNT_RAT_AMT)
+boxplot(df_reg$DIRECT_DSCNT_AMT)
+boxplot(df_reg$PROD_DSCNT_PERCENT)
+boxplot(df_reg$TRANS_DSCNT_PERCENT)
+boxplot(df_reg$DIRECT_DSCNT_PERCENT)
+boxplot(df_reg$MEAN_SEG_LIFESTYLE)
+boxplot(df_reg$MEAN_SEG_AGE)
+boxplot(df_reg$MEAN_FAMILY_MEMBERS)
+boxplot(df_reg$MEAN_BRAND_TYPE_CD)
+boxplot(df_reg$TOTAL_QTY)
+
+hist(df_reg_norm$TOTAL_PROD_DSCNT)
+
+# Gráfico de dispersão entre vendas e promoções
+plot(df_reg$VOL_TOTAL_GROSS ~ df_reg$PROD_DSCNT_ISSUED_AMT)  
+plot(df_reg$VOL_TOTAL_GROSS ~ df_reg$TRANS_DSCNT_RAT_AMT)
+plot(df_reg$VOL_TOTAL_GROSS ~ df_reg$DIRECT_DSCNT_AMT)
+```
+```{r}
+#RETIRAR NAs
+
+df_reg <- na.omit(df_reg)
+```
+
+```{r}
+#Normalização
+##Dividir da variável objetivo para manter as previsões reais
+
+VOL_TOTAL_GROSS <- df_reg$VOL_TOTAL_GROSS
+variaveis <- df_reg[, !(names(df_reg) %in% c("VOL_TOTAL_GROSS"))]
+
+variaveis_norm <- as.data.frame(scale(variaveis))
+
+df_reg_norm <- cbind(variaveis_norm, VOL_TOTAL_GROSS)
+```
+
+
+```{r}
+#DIVIDIR OS DADOS EM TREINO E TESTE
+
+#DEFINIR UMA SEMENTE PARA REPRODUTIBILIDADE
+set.seed(123)  
+
+#SELECIONAR 70% DOS DADOS PARA TREINO E 30% PARA TESTE
+indices_treino <- sample(1:nrow(df_reg_norm), 0.7 * nrow(df_reg_norm))  
+dados_treino <- df_reg_norm[indices_treino, ]
+dados_teste <- df_reg_norm[-indices_treino, ]
+```
+
+
+```{r}
+#MODELO REGRESSÂO LINEAR
+
+modelo <- lm(VOL_TOTAL_GROSS ~ MEAN_SEG_LIFESTYLE + MEAN_SEG_AGE + MEAN_FAMILY_MEMBERS + MEAN_BRAND_TYPE + TOTAL_PROD_DSCNT + TOTAL_TRANS_DSCNT + TOTAL_DIRECT_DSCNT + MEAN_PROD_DSCNT_PERCENT + MEAN_TRANS_DSCNT_PERCENT + MEAN_DIRECT_DSCNT_PERCENT + TOTAL_QTY, data = dados_treino)
+modelo
+```
+
+
+```{r}
+#AVALIAR O MODELO COM APLICAÇÃO NOS DADOS DE TESTE
+
+# Faz as previsões nos dados de teste
+previsoes <- predict(modelo, newdata = dados_teste)
+summary(previsoes)
+
+# Calcula o coeficiente de determinação (R²) nos dados de teste
+R2 <- cor(dados_teste$VOL_TOTAL_GROSS, previsoes)^2
+R2
+
+# Calcula o erro médio quadrático (RMSE) nos dados de teste
+RMSE <- sqrt(mean((dados_teste$VOL_TOTAL_GROSS - previsoes)^2))
+RMSE
+
+# Calcula o erro quarático médio (MSE) nos dados de teste
+MSE <- mean((dados_teste$VOL_TOTAL_GROSS - previsoes)^2)
+MSE
+
+#COMPARAR AS PREVISOES 
+
+comparacao_teste <- data.frame(Real = dados_teste$VOL_TOTAL_GROSS, Previsao = previsoes)
+
+library(ggplot2)
+
+ggplot(comparacao_teste, aes(x = Real, y = Previsao)) +
+  geom_point() +
+  xlab("Valores Reais") +
+  ylab("Previsões")+ 
+geom_abline(color = "red",
+            linewidth = 2)
+```
+
+```{r}
+comparacao_teste
+```
+
+```{r}
+#RANDOM FORREST REGRESSION
+
+modelo_rf <- randomForest(VOL_TOTAL_GROSS ~ MEAN_SEG_LIFESTYLE + MEAN_SEG_AGE + MEAN_FAMILY_MEMBERS + MEAN_BRAND_TYPE + TOTAL_PROD_DSCNT + TOTAL_TRANS_DSCNT + TOTAL_DIRECT_DSCNT + MEAN_PROD_DSCNT_PERCENT + MEAN_TRANS_DSCNT_PERCENT + MEAN_DIRECT_DSCNT_PERCENT + TOTAL_QTY, data = dados_treino)
+
+modelo_rf
+```
+
+
+```{r}
+#Visualizar a importância das variáveis no modelo de Random Forest
+
+feature_importance <- data.frame(importance(modelo_rf))
+feature_importance$IncMSE <- feature_importance[, 1]
+feature_importance$features <- row.names(feature_importance)
+feature_importance %>% 
+    ggplot(aes(x=reorder(features, -IncMSE), y=IncMSE, fill=-IncMSE)) +
+    geom_bar(stat = "identity") + 
+    theme(axis.text.x = element_text(angle = 90,
+                                     vjust = 0.5,
+                                     hjust = 0.5))
+```
+
+```{r}
+#AVALIAR O MODELO COM APLICAÇÃO NOS DADOS DE TESTE
+
+# Faz as previsões nos dados de teste
+previsoes <- predict(modelo_rf, newdata = dados_teste)
+summary(previsoes)
+
+# Calcula o coeficiente de determinação (R²) nos dados de teste
+R2 <- cor(dados_teste$VOL_TOTAL_GROSS, previsoes)^2
+R2
+
+# Calcula o erro médio quadrático (RMSE) nos dados de teste
+RMSE <- sqrt(mean((dados_teste$VOL_TOTAL_GROSS - previsoes)^2))
+RMSE
+
+# Calcula o erro quarático médio (MSE) nos dados de teste
+MSE <- mean((dados_teste$VOL_TOTAL_GROSS - previsoes)^2)
+MSE
+
+#COMPARAR AS PREVISOES 
+
+comparacao_teste <- data.frame(Real = dados_teste$VOL_TOTAL_GROSS, Previsao = previsoes)
+
+library(ggplot2)
+
+ggplot(comparacao_teste, aes(x = Real, y = Previsao)) +
+  geom_point() +
+  xlab("Valores Reais") +
+  ylab("Previsões")+ 
+geom_abline(color = "red",
+            linewidth = 2)
+```
+
+```{r}
+comparacao_teste
+```
+
+
+ASSOCIATION TENTATIVA 
+
+```{r}
+library(arules)
+library(arulesSequences)
+```
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+continente_trx <- read.csv2("continente.trx_sample_aleatoria.csv")
+```
+
+```{r}
+#Criar Data frame para modelo
+df <- 
+  continente_trx %>%
+  select(TRANSACTION_ID_MASK, SKU)
+
+head(df)
+```
+
+```{r}
+df$TRANSACTION_ID_MASK <- as.factor(df$TRANSACTION_ID_MASK)
+df$SKU <- as.factor(df$SKU)
+trans <- as(df, "transactions")
+dim(trans)
+itemLabels(trans)
+```
+
+```{r}
+#AssociationRules
+
+modelo <- apriori(trans, parameter = list(support = 0.0001, confidence = 0.1))
+```
+
+```{r}
+inspect(modelo)
+```
+```{r}
+inspect(head(modelo, n = 10))
+```
+
+
+
+

@@ -1,0 +1,582 @@
+---
+title: "LOG Final"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+```{r}
+library(cluster)
+library(stats)
+library(ggplot2)
+library(ggfortify)
+library(tidyverse)
+library(factoextra)
+library(dplyr)
+library(tidyr)
+library(RMariaDB)
+```
+
+K-MEANS FINAL: 
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+continente_trx <- read.csv2("continente.trx_sample_aleatoria.csv")
+```
+
+```{r}
+aai_dim_product$SKU <- as.integer(aai_dim_product$SKU)
+
+df <- 
+  continente_trx %>%
+  inner_join(aai_dim_product, by = c("SKU")) %>%
+  select(SKU, TIME_KEY, SUBCAT_CD_EXT, QTY, TRANSACTION_ID_MASK, NET_SLS_AMT, GROSS_SLS_AMT, PROD_DSCNT_ISSUED_AMT, TRANS_DSCNT_RAT_AMT, DIRECT_DSCNT_AMT, BRAND_TYPE_CD)
+
+str(df)
+```
+
+```{r}
+df$NET_SLS_AMT <- as.numeric(df$NET_SLS_AMT)
+df$GROSS_SLS_AMT <- as.numeric(df$GROSS_SLS_AMT)
+df$PROD_DSCNT_ISSUED_AMT <- as.numeric(df$PROD_DSCNT_ISSUED_AMT)
+df$TRANS_DSCNT_RAT_AMT <- as.numeric(df$TRANS_DSCNT_RAT_AMT) 
+df$DIRECT_DSCNT_AMT <- as.numeric(df$DIRECT_DSCNT_AMT)
+df$QTY <- as.numeric(df$QTY)
+df$SUBCAT_CD_EXT <- as.integer(df$SUBCAT_CD_EXT)
+df <- 
+  df %>%
+  mutate(BRAND_TYPE_CD = case_when(
+                        BRAND_TYPE_CD == "MP" ~ 0,
+                        BRAND_TYPE_CD == "MF" ~ 1,
+                        BRAND_TYPE_CD == "MX" ~ 0,
+                        BRAND_TYPE_CD == "PP" ~ 0))
+```
+
+```{r}
+summary(df)
+```
+
+
+```{r}
+#VERIFICAR SE TEMOS UMA AMOSTRAR BEM REPRESENTATIVA ANUAL
+
+df$TIME_KEY <- as.Date(as.character(df$TIME_KEY), format = "%Y%m%d")
+
+soma_gross_sls_amt_por_dia <- aggregate(GROSS_SLS_AMT ~ TIME_KEY, data = df, FUN = sum)
+
+plot(soma_gross_sls_amt_por_dia$TIME_KEY, soma_gross_sls_amt_por_dia$GROSS_SLS_AMT, 
+     type = "p", 
+     xlab = "Data", 
+     ylab = "Soma do Valor Total Bruto", 
+     main = "Soma do Valor Total Bruto por Dia")
+```
+
+
+```{r}
+#CRIAÇÃO DE VARIÁVEIS
+dff <- 
+  df %>%
+  group_by(SUBCAT_CD_EXT) %>%
+  summarise(TOTAL_GROSS = sum(GROSS_SLS_AMT),
+            TOTAL_QTY = sum(QTY),
+            MEAN_GROSS = mean(GROSS_SLS_AMT),
+            MEAN_PROD_DSCNT = mean((PROD_DSCNT_ISSUED_AMT / GROSS_SLS_AMT)*100, na.rm = TRUE),
+            MEAN_TRANS_DSCNT = mean((TRANS_DSCNT_RAT_AMT / GROSS_SLS_AMT)*100 , na.rm = TRUE),
+            MEAN_DIRECT_DSCNT = mean((DIRECT_DSCNT_AMT/ GROSS_SLS_AMT)*100, na.rm = TRUE),
+            MEAN_BRAND_TYPE_CD = mean(BRAND_TYPE_CD))
+
+dff <- dff %>% filter(!is.infinite(MEAN_DIRECT_DSCNT))
+```
+```{r}
+SUBCAT_CD_EXT <- dff$SUBCAT_CD_EXT #Para adicionar mais tarde no df dos clusters
+df1 <- dff[, !(names(dff) %in% c("SUBCAT_CD_EXT"))]
+```
+
+
+```{r}
+#Normalização das variaveis
+df2 <- scale(df1)
+
+#Retornar a dataframe
+df2 <- as.data.frame(df2)
+```
+
+
+```{r} 
+#VER O NUMERO DE CLUSTERS
+
+wss <- (nrow(df2)-1)*sum(apply(df2,2,var))
+for (i in 2:15) wss[i] <- sum(kmeans(df2, centers=i)$withinss)
+plot(1:15, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+```
+
+
+```{r}
+set.seed(123)
+
+fviz_nbclust(df2, kmeans, method = "silhouette") 
+```
+
+
+```{r}
+#K-means
+set.seed(123)
+k3_results <- kmeans(df2, centers = 3, nstart = 25)
+autoplot(k3_results, df2, frame = TRUE)
+k3_results$size
+```
+
+
+```{r}
+#ADICIONAR OS CLUSTERS AO DATAFRAME
+df3 <- 
+df2 %>%
+  mutate(Cluster = k3_results$cluster)
+
+df3$Cluster <- as.factor(df3$Cluster)
+df3$SUBCAT_CD_EXT <- SUBCAT_CD_EXT
+```
+
+
+```{r}
+# Criar o data frame com os centroids
+center <- as.data.frame(k3_results$centers)
+
+
+# Gerar o data frame transposto
+library(data.table)
+df_t <- transpose(center)
+
+#redefine row and column names
+rownames(df_t) <- colnames(center)
+colnames(df_t) <- rownames(center)
+
+
+# Criar a variável x com o nome das variáveis
+df_t$x <- rownames(df_t) 
+```
+```{r}
+# Construir um data frame em que a coluna x será o nome das features, a coluna y será o valor dos centroides, e a coluna group será o nome do cluster
+df_reshaped <- data.frame(x = df_t$x,                           
+                       y = c(df_t$'1', df_t$'2', df_t$'3'),
+                       group = c(rep("1", nrow(df_t)),
+                                 rep("2", nrow(df_t)),
+                                 rep("3", nrow(df_t))
+                                 )
+)
+
+```
+```{r}
+# Cria o gráfico de linhas a partir da tabela df_reshaped
+df_reshaped %>%
+  ggplot( aes(x=x, y=y, group=group, color=group)) +
+    geom_line()
+```
+
+```{r}
+k3_results$centers
+k3_results$tot.withinss
+k3_results$betweenss
+k3_results$size
+```
+
+REGRESSÂO FINAL
+
+```{r}
+setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+continente_trx2 <- read.csv2("continente.trx_sample_aleatoria2.csv")
+```
+
+```{r}
+#VERIFICAR SE TEMOS UMA AMOSTRAR BEM REPRESENTATIVA ANUAL
+
+continente_trx2$TIME_KEY <- as.Date(as.character(continente_trx2$TIME_KEY), format = "%Y%m%d")
+#continente_trx$TIME_KEY <- as.yearmon(continente_trx$TIME_KEY)
+
+continente_trx2$GROSS_SLS_AMT <- as.numeric(continente_trx2$GROSS_SLS_AMT)
+soma_valor_total_bruto_por_dia <- aggregate(GROSS_SLS_AMT ~ TIME_KEY, data = continente_trx2, FUN = sum)
+
+plot(soma_valor_total_bruto_por_dia$TIME_KEY, soma_valor_total_bruto_por_dia$GROSS_SLS_AMT, 
+     type = "p", 
+     xlab = "Data", 
+     ylab = "Soma do Valor Total Bruto", 
+     main = "Soma do Valor Total Bruto por Dia")
+```
+
+```{r}
+#CRIAR DATAFRAME PARA REGRESSÃO
+aai_dim_product$SKU <- as.integer(aai_dim_product$SKU)
+
+df4 <- 
+  aai_dim_product %>%
+  inner_join(continente_trx2, by = c("SKU")) %>%
+  select(SKU, SUBCAT_CD_EXT, QTY, NET_SLS_AMT, GROSS_SLS_AMT, PROD_DSCNT_ISSUED_AMT, TRANS_DSCNT_RAT_AMT, DIRECT_DSCNT_AMT, CUSTOMER_ACCOUNT_NR_MASK, TIME_KEY, TRANSACTION_ID_MASK, BRAND_TYPE_CD)
+
+df4$CUSTOMER_ACCOUNT_NR_MASK <- as.integer(df4$CUSTOMER_ACCOUNT_NR_MASK)
+df4$QTY <- as.numeric(df4$QTY)
+df4$NET_SLS_AMT <- as.numeric(df4$NET_SLS_AMT)
+df4$GROSS_SLS_AMT <- as.numeric(df4$GROSS_SLS_AMT)
+df4$PROD_DSCNT_ISSUED_AMT <- as.numeric(df4$PROD_DSCNT_ISSUED_AMT)
+df4$TRANS_DSCNT_RAT_AMT <- as.numeric(df4$TRANS_DSCNT_RAT_AMT)
+df4$DIRECT_DSCNT_AMT <- as.numeric(df4$DIRECT_DSCNT_AMT)
+```
+```{r}
+aai_dim_customer$CUSTOMER_ACCOUNT_NR_MASK <- as.integer(aai_dim_customer$CUSTOMER_ACCOUNT_NR_MASK)
+df5 <- 
+  df4 %>%
+  inner_join(aai_dim_customer, by = c("CUSTOMER_ACCOUNT_NR_MASK")) %>%
+  select(TIME_KEY, TRANSACTION_ID_MASK, SKU, CUSTOMER_ACCOUNT_NR_MASK, SEG_AGE, seg_lifestyle_cd, FAMILY_MEMBERS, SUBCAT_CD_EXT, BRAND_TYPE_CD, QTY, NET_SLS_AMT, GROSS_SLS_AMT, PROD_DSCNT_ISSUED_AMT, TRANS_DSCNT_RAT_AMT, DIRECT_DSCNT_AMT )
+```
+
+```{r}
+#Verificar se há algum valor vazio na coluna "CUSTOMER_ACCOUNT_NR_MASK"
+valor_vazio <- any(is.na(df5$CUSTOMER_ACCOUNT_NR_MASK))
+
+if (valor_vazio) {
+  cat("Existem valores vazios na coluna 'cliente'.")
+} else {
+  cat("Não existem valores vazios na coluna 'cliente'.")
+}
+```
+
+```{r}
+#Quantos valores vazios existem na coluna "CUSTOMER_ACCOUNT_NR_MASK"
+count_vazios <- sum(is.na(df5$CUSTOMER_ACCOUNT_NR_MASK), na.rm = TRUE)
+
+cat("Existem", count_vazios, "valores vazios na coluna 'cliente'.")
+```
+
+```{r}
+#Remover os valores vazios na coluna "CUSTOMER_ACCOUNT_NR_MASK"
+df5 <- df5[complete.cases(df4$CUSTOMER_ACCOUNT_NR_MASK), ]
+
+nrow(df5)
+```
+
+```{r}
+#Transformar variáveis
+
+df6 <- 
+  df5 %>%
+   mutate(FAMILY_MEMBERS = case_when(
+    FAMILY_MEMBERS %in% c("0", "1", "2", "3", "4", "5", "6", "7") ~ as.numeric(FAMILY_MEMBERS),
+    is.na(FAMILY_MEMBERS) ~ NA_integer_,
+    TRUE ~ NA_integer_),
+    BRAND_TYPE_CD = case_when(
+                        BRAND_TYPE_CD == "MP" ~ 0,
+                        BRAND_TYPE_CD == "MF" ~ 1,
+                        BRAND_TYPE_CD == "MX" ~ 0,
+                        BRAND_TYPE_CD == "PP" ~ 0),
+    SEG_AGE = recode(SEG_AGE,
+                        "SA_0" = 0,
+                        "SA_1" = 1,
+                        "SA_2" = 2,
+                        "SA_3" = 3,
+                        "SA_4" = 4,
+                        "SA_5" = 5,
+                        "SA_6" = 6,
+                        "SA_7" = 7)) 
+```
+```{r}
+df6$seg_lifestyle_cd <- as.numeric(df6$seg_lifestyle_cd)
+```
+```{r}
+df7 <- 
+  df6 %>%
+  na.omit(FAMILY_MEMBERS)
+```
+```{r}
+#Ordenar as transações por ordem cronológica
+df7 <- df7 %>%
+  arrange(TIME_KEY)
+```
+
+```{r}
+#Dividir os dados em conjunto de treino e teste
+#Filtrar as linhas para fazer feature engineering sem leak
+
+#TREINO
+dados_treino_independente <- 
+  df7 %>% 
+  filter(TIME_KEY >= as.Date("2021-01-01") & TIME_KEY <= as.Date("2021-09-30"))
+
+#Filtrar as linhas correspondentes ao primeiro trimestre de 2022 para teste
+
+dados_treino_objetivo <- 
+  df7 %>% 
+  filter(TIME_KEY >= as.Date("2021-10-01") & TIME_KEY <= as.Date("2021-12-31"))
+
+#TESTE
+dados_teste_independente <- 
+  df7 %>% 
+  filter(TIME_KEY >= as.Date("2022-01-01") & TIME_KEY <= as.Date("2022-02-28"))
+
+dados_teste_objetivo <- 
+  df7 %>% 
+  filter(TIME_KEY >= as.Date("2022-03-01") & TIME_KEY <= as.Date("2022-03-31"))
+```
+
+```{r}
+#CRIAR VARIÀVEIS Independestes para os dois conjuntos
+##TREINO
+dados_treino_independente <- 
+  dados_treino_independente %>%
+  group_by(CUSTOMER_ACCOUNT_NR_MASK) %>%
+  mutate(QTY_SHOPPING = n())
+
+df8 <- 
+  dados_treino_independente %>%
+  group_by(SUBCAT_CD_EXT) %>%
+  summarise(TOTAL_PROD_DSCNT = sum(PROD_DSCNT_ISSUED_AMT),
+            TOTAL_TRANS_DSCNT = sum(TRANS_DSCNT_RAT_AMT),
+            TOTAL_DIRECT_DSCNT = sum(DIRECT_DSCNT_AMT),
+            TOTAL_QTY = sum(QTY),
+            MEAN_QTY = mean(QTY),
+            MEAN_GROSS_AMT = mean(GROSS_SLS_AMT),
+            MEAN_PROD_DSCNT_PERCENT = mean(((PROD_DSCNT_ISSUED_AMT / GROSS_SLS_AMT) * 100), na.rm = TRUE),
+            MEAN_TRANS_DSCNT_PERCENT = mean(((TRANS_DSCNT_RAT_AMT / GROSS_SLS_AMT) * 100), na.rm = TRUE),
+            MEAN_DIRECT_DSCNT_PERCENT = mean(((DIRECT_DSCNT_AMT / GROSS_SLS_AMT) * 100), na.rm = TRUE),
+            QTY_SHOPPING = mean(QTY_SHOPPING))
+
+#LIMPEZA DOS DADOS
+df8 <- df8 %>% filter(!is.infinite(MEAN_DIRECT_DSCNT_PERCENT))
+df8 <- df8 %>% filter(!is.infinite(MEAN_PROD_DSCNT_PERCENT))
+
+df8 <- df8[df8$TOTAL_QTY >= 0, ]
+
+df8 <- na.omit(df8)
+
+#TESTE
+dados_teste_independente <- 
+  dados_treino_independente %>%
+  group_by(CUSTOMER_ACCOUNT_NR_MASK) %>%
+  mutate(QTY_SHOPPING = n())
+
+df9 <- 
+  dados_teste_independente %>%
+  group_by(SUBCAT_CD_EXT) %>%
+  summarise(TOTAL_PROD_DSCNT = sum(PROD_DSCNT_ISSUED_AMT),
+            TOTAL_TRANS_DSCNT = sum(TRANS_DSCNT_RAT_AMT),
+            TOTAL_DIRECT_DSCNT = sum(DIRECT_DSCNT_AMT),
+            TOTAL_QTY = sum(QTY),
+            MEAN_QTY = mean(QTY),
+            MEAN_GROSS_AMT = mean(GROSS_SLS_AMT),
+            MEAN_PROD_DSCNT_PERCENT = mean(((PROD_DSCNT_ISSUED_AMT / GROSS_SLS_AMT) * 100), na.rm = TRUE),
+            MEAN_TRANS_DSCNT_PERCENT = mean(((TRANS_DSCNT_RAT_AMT / GROSS_SLS_AMT) * 100), na.rm = TRUE),
+            MEAN_DIRECT_DSCNT_PERCENT = mean(((DIRECT_DSCNT_AMT / GROSS_SLS_AMT) * 100), na.rm = TRUE),
+            QTY_SHOPPING = mean(QTY_SHOPPING))
+
+#LIMPEZA DOS DADOS
+df9 <- df9 %>% filter(!is.infinite(MEAN_DIRECT_DSCNT_PERCENT))
+df9 <- df9 %>% filter(!is.infinite(MEAN_PROD_DSCNT_PERCENT))
+
+df9 <- df9[df9$TOTAL_QTY >= 0, ]
+
+df9 <- na.omit(df9)
+```
+
+```{r}
+#CRIAR A VARIÀVEL OBJETIVA
+##TREINO
+dados_treino_objetivo <- 
+  dados_treino_objetivo %>%
+  group_by(SUBCAT_CD_EXT) %>%
+  summarise(VOL_TOTAL_GROSS = sum(GROSS_SLS_AMT))
+
+dados_treino <- 
+  df8 %>%
+  inner_join(dados_treino_objetivo, by = c("SUBCAT_CD_EXT"))
+
+#TESTE
+dados_teste_objetivo <- 
+  dados_teste_objetivo %>%
+  group_by(SUBCAT_CD_EXT) %>%
+  summarise(VOL_TOTAL_GROSS = sum(GROSS_SLS_AMT))
+
+dados_teste <- 
+  df9 %>%
+  inner_join(dados_teste_objetivo, by = c("SUBCAT_CD_EXT"))
+```
+
+```{r}
+dados_treino <- dados_treino[, !(names(dados_treino) %in% c("SUBCAT_CD_EXT"))]
+dados_teste <- dados_teste[, !(names(dados_teste) %in% c("SUBCAT_CD_EXT"))]
+```
+
+```{r}
+#Normalização
+##Dividir da variável objetivo para manter as previsões reais
+###TREINO
+VOL_TOTAL_GROSS <- dados_treino$VOL_TOTAL_GROSS
+
+variaveis <- dados_treino[, !(names(dados_treino) %in% c("VOL_TOTAL_GROSS"))]
+
+variaveis_norm <- as.data.frame(scale(variaveis))
+
+dados_treino2 <- cbind(variaveis_norm, VOL_TOTAL_GROSS)
+
+###TESTE
+VOL_TOTAL_GROSS <- dados_teste$VOL_TOTAL_GROSS
+
+variaveis <- dados_teste[, !(names(dados_teste) %in% c("VOL_TOTAL_GROSS"))]
+
+variaveis_norm <- as.data.frame(scale(variaveis))
+
+dados_teste2 <- cbind(variaveis_norm, VOL_TOTAL_GROSS)
+```
+
+```{r}
+#CORRELAÇÂO
+cor(dados_treino2)
+```
+
+```{r}
+#MODELO REGRESSÂO LINEAR
+
+modelo <- lm(VOL_TOTAL_GROSS ~ ., data = dados_treino2)
+modelo
+```
+
+
+```{r}
+#Visualizar a importância das variáveis no modelo de regressão linear
+
+coeficientes <- coef(modelo)[-1]  
+
+feature_importance <- data.frame(Variable = names(coeficientes),
+                                 Coefficient = abs(coeficientes))
+
+feature_importance <- feature_importance[order(feature_importance$Coefficient, decreasing = TRUE), ]
+
+library(ggplot2)
+ggplot(feature_importance, aes(x = reorder(Variable, Coefficient), y = Coefficient, fill = Coefficient)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Variável", y = "Valor absoluto do coeficiente") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r}
+#AVALIAR O MODELO COM APLICAÇÃO NOS DADOS DE TESTE
+
+# Faz as previsões nos dados de teste
+previsoes <- predict(modelo, newdata = dados_teste2)
+summary(previsoes)
+
+# Calcula o coeficiente de determinação (R²) nos dados de teste
+R2 <- cor(dados_teste2$VOL_TOTAL_GROSS, previsoes)^2
+R2
+
+# Calcula o erro médio quadrático (RMSE) nos dados de teste
+RMSE <- sqrt(mean((previsoes - dados_teste2$VOL_TOTAL_GROSS)^2))
+RMSE
+
+# Calcula o erro quarático médio (MSE) nos dados de teste
+erro <- (previsoes - dados_teste2$VOL_TOTAL_GROSS)^2
+MSE <- mean(erro)
+MSE
+
+#COMPARAR AS PREVISOES 
+
+comparacao_teste <- data.frame(Real = dados_teste2$VOL_TOTAL_GROSS, Previsao = previsoes)
+
+library(ggplot2)
+
+ggplot(comparacao_teste, aes(x = Real, y = Previsao)) +
+  geom_point() +
+  xlab("Valores Reais") +
+  ylab("Previsões")+ 
+geom_abline(color = "red",
+            linewidth = 2)
+```
+
+```{r}
+comparacao_teste
+```
+
+```{r}
+#RANDOM FORREST REGRESSION
+
+library(randomForest)
+
+modelo_rf <- randomForest(VOL_TOTAL_GROSS ~ ., data = dados_treino2)
+
+modelo_rf
+```
+
+
+```{r}
+#Visualizar a importância das variáveis no modelo de Random Forest
+
+feature_importance <- data.frame(importance(modelo_rf))
+feature_importance$IncMSE <- feature_importance[, 1]
+feature_importance$features <- row.names(feature_importance)
+feature_importance %>% 
+    ggplot(aes(x=reorder(features, -IncMSE), y=IncMSE, fill=-IncMSE)) +
+    geom_bar(stat = "identity") + 
+    theme(axis.text.x = element_text(angle = 90,
+                                     vjust = 0.5,
+                                     hjust = 0.5))
+```
+
+```{r}
+#AVALIAR O MODELO COM APLICAÇÃO NOS DADOS DE TESTE
+
+# Faz as previsões nos dados de teste
+previsoes <- predict(modelo_rf, newdata = dados_teste2)
+summary(previsoes)
+
+# Calcula o coeficiente de determinação (R²) nos dados de teste
+R2 <- cor(dados_teste2$VOL_TOTAL_GROSS, previsoes)^2
+R2
+
+# Calcula o erro médio quadrático (RMSE) nos dados de teste
+RMSE <- sqrt(mean((dados_teste2$VOL_TOTAL_GROSS - previsoes)^2))
+RMSE
+
+# Calcula o erro quarático médio (MSE) nos dados de teste
+MSE <- mean((previsoes - dados_teste2$VOL_TOTAL_GROSS)^2)
+MSE
+
+#COMPARAR AS PREVISOES 
+
+comparacao_teste <- data.frame(Real = dados_teste2$VOL_TOTAL_GROSS, Previsao = previsoes)
+
+library(ggplot2)
+
+ggplot(comparacao_teste, aes(x = Real, y = Previsao)) +
+  geom_point() +
+  xlab("Valores Reais") +
+  ylab("Previsões")+ 
+geom_abline(color = "red",
+            linewidth = 2)
+```
+
+```{r}
+comparacao_teste
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
