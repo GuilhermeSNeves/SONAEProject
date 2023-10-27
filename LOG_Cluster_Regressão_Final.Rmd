@@ -22,7 +22,7 @@ library(RMariaDB)
 K-MEANS FINAL: 
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 continente_trx <- read.csv2("continente.trx_sample_aleatoria.csv")
 ```
 
@@ -186,7 +186,7 @@ k3_results$size
 REGRESSÂO FINAL
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 continente_trx2 <- read.csv2("continente.trx_sample_aleatoria2.csv")
 ```
 
