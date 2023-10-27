@@ -11,22 +11,22 @@ library("dplyr")
 library("tidyr")
 library("RMariaDB")
 
-setwd("/Users/GuilhermeNeves/Library/Mobile Documents/com~apple~CloudDocs/Porto Business School/Modulo I/Project 1")
+setwd("path")
 
 drv <- dbDriver("MariaDB")
 
 PB1 <- dbConnect(drv,
-       host = "098bd92b-461b-481c-a40d-ea47cab7567f.497129fd685f442ca4df759dd55ec01b.databases.appdomain.cloud",
-       username = "pgbia16p1e2g7u2",
-       password = "4Wh7Ln",
-       port = 30943,
-       ssl.ca = "041baeec-1272-11e9-8c9b-ae2e3a9c1b17(2)",
-       dbname = "pgbia16p1e2g7u2")
+       host = "",
+       username = "",
+       password = "",
+       port = ,
+       ssl.ca = "",
+       dbname = "")
 ```
 
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 continente_trx <- read.csv2("continente.trx_sample_aleatoria.csv")
 cluster_table <- read.csv2("cluster_table_RM.csv")
 aai_dim_customer <- dbReadTable(PB1,"aai_dim_customer")
@@ -125,7 +125,7 @@ k4_results$centers
 K-MEANS TENTATIVA 2
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 sample_aleat <- read.csv2("sample_aleatoria_general1.csv")
 ```
 
@@ -178,7 +178,7 @@ loadings(fit)
 
 
 ```{r}
-#setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 #write.csv2(df, file = "df_cluster1.csv")
 ```
 
@@ -257,7 +257,7 @@ k5_results$centers
 K-MEANS TENTATIVA 3
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 sample_aleat <- read.csv2("sample_aleatoria_general1.csv")
 ```
 
@@ -323,12 +323,12 @@ plot(soma_valor_total_bruto_por_dia$dia_transacao, soma_valor_total_bruto_por_di
 
 
 ```{r}
-#setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 #write.csv2(df1, file = "Tabela_de_cluster_final.csv")
 ```
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 df1 <- read_csv2("Tabela_de_cluster_final.csv")
 ```
 
@@ -455,7 +455,7 @@ library(factoextra)
 ```
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 df_cluster <- read.csv2("df_cluster1.csv")
 ```
 
@@ -535,7 +535,7 @@ DBSCAN TENTATIVA 2
 
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 df1 <- read.csv2("Tabela_de_cluster_final.csv")
 ```
 
@@ -627,7 +627,7 @@ fviz_cluster(res.fpc, score_z, geom = "point")
 REGRESSÂO TENTATIVA 1
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 continente_trx_sample_aleat <- read.csv2("continente.trx_sample_aleatoria.csv")
 ```
 
@@ -817,7 +817,7 @@ REGRESSÂO TENTATIVA 2
 
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 continente_trx <- read.csv2("continente.trx_sample_aleatoria.csv")
 ```
 
@@ -1137,7 +1137,7 @@ library(arulesSequences)
 ```
 
 ```{r}
-setwd("/Users/GuilhermeNeves/Desktop/DATA Mining databases")
+setwd("path")
 continente_trx <- read.csv2("continente.trx_sample_aleatoria.csv")
 ```
 
